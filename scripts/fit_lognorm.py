@@ -42,7 +42,7 @@ plt.title('Log-normal Fit to ' + data_column + ' Data')
 plt.legend()
 
 # Save the plot with a filename based on the input CSV filename
-plot_file_name = base_name + '_plot.png'
-plt.savefig(plot_file_name)
-print(f"Plot saved to {plot_file_name}")
+plot_file_name = base_name + '_plot.png' 
+plt.savefig(plot_file_name) 
+print(f"Plot saved to {plot_file_name}") 
 

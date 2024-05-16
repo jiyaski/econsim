@@ -25,36 +25,40 @@ def read_data(file_path, line_number):
     return data
 
 
-def calculate_percentiles(data, num_bins=100):
+def calculate_percentiles(data, num_percentiles=100):
     data.sort()
-    bin_size = len(data) // num_bins
-    bins = [data[i*bin_size:(i+1)*bin_size] for i in range(num_bins)]
-    bin_averages = [np.mean(bin) for bin in bins]
-    return bin_averages
+    percentiles = []
+    for i in range(num_percentiles + 1):
+        index = int(np.ceil((i / num_percentiles) * (len(data) - 1)))
+        percentiles.append(data[index])
+    return percentiles
 
 
-def plot_histogram(bin_averages):
+def plot_histogram(percentiles, plot_filepath):
     plt.figure(figsize=(10, 6))
-    plt.bar(range(1, 101), bin_averages, width=1.0)
+    plt.bar(range(101), percentiles, width=1.0)
     plt.xlabel('Percentiles')
-    plt.ylabel('Average Value')
+    plt.ylabel('Net Worth')
     plt.yscale('log') 
-    plt.title('Histogram of Percentile Averages')
-    plt.savefig('temp_plot.png')
+    plt.title('Wealth Distribution Percentiles') 
+    plt.grid() 
+    plt.savefig(plot_filepath)
     plt.close()
 
 
 def main():
-    default_file_path = 'data.csv'
+    default_data_filepath = 'data/data.csv'
+    default_plot_filepath = 'results/plot.png'
     default_line_number = -1
 
     # Check command line arguments
-    file_path = sys.argv[1] if len(sys.argv) > 1 else default_file_path
-    line_number = int(sys.argv[2]) if len(sys.argv) > 2 else default_line_number
+    data_filepath = sys.argv[1] if len(sys.argv) > 1 else default_data_filepath
+    plot_filepath = sys.argv[2] if len(sys.argv) > 2 else default_plot_filepath
+    line_number = int(sys.argv[3]) if len(sys.argv) > 3 else default_line_number
 
-    data = read_data(file_path, line_number)
-    bin_averages = calculate_percentiles(data)
-    plot_histogram(bin_averages)
+    data = read_data(data_filepath, line_number)
+    percentiles = calculate_percentiles(data)
+    plot_histogram(percentiles, plot_filepath)
 
 
 
