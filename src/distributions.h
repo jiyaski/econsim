@@ -18,8 +18,8 @@ public:
 
 private:
     // const values are generally empirically determined by separate data analysis 
-    static constexpr int AGE_MIN = 0; 
-    static constexpr int AGE_MAX = 49; 
+    static constexpr double AGE_MIN = 0; 
+    static constexpr double AGE_MAX = 50; 
     static constexpr double MIN_CONSUMPTION_MU = 9.2103; 
     static constexpr double MIN_CONSUMPTION_SIGMA = 0.69078; 
     static constexpr double CONSUMPTION_MIN = 0.0000005;
@@ -35,7 +35,7 @@ private:
     std::random_device rd;
     std::mt19937 gen;
 
-    std::uniform_int_distribution<> dist_age; 
+    std::uniform_real_distribution<> dist_age; 
     std::lognormal_distribution<> dist_min_consumption; 
     std::uniform_real_distribution<> dist_consumption;
     std::normal_distribution<> dist_avg_return;

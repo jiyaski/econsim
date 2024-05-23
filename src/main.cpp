@@ -3,10 +3,15 @@
 
 #include <string>
 #include <cstring>
+#include <algorithm> 
 #include <fstream> 
 #include <iostream> 
 #include <vector>
 #include <unistd.h>
+
+
+int timestep; 
+int lifetime; 
 
 
 int main(int argc, char* argv[]) {
@@ -14,8 +19,8 @@ int main(int argc, char* argv[]) {
     RandomSampler randomSampler; 
     std::vector<Agent> agents; 
     int num_agents = 100;   // defaults if no CLI arg provided 
-    int timestep = YEAR;    // 
-    int lifetime = 50;      // 
+    timestep = YEAR;        // 
+    lifetime = 50;          // 
 
     // parse CLI args 
     int opt; 
@@ -25,15 +30,11 @@ int main(int argc, char* argv[]) {
             num_agents = std::atoi(optarg); 
             break; 
         case 't': 
-            if (strcmp(optarg, "day") == 0) {
-                timestep = DAY;
-            } else if (strcmp(optarg, "week") == 0) {
-                timestep = WEEK;
-            } else if (strcmp(optarg, "month") == 0) {
-                timestep = MONTH;
-            } else if (strcmp(optarg, "year") == 0) {
-                timestep = YEAR;
-            } else {
+            if       (strcmp(optarg, "day") == 0)    { timestep = DAY;   } 
+            else if  (strcmp(optarg, "week") == 0)   { timestep = WEEK;  } 
+            else if  (strcmp(optarg, "month") == 0)  { timestep = MONTH; } 
+            else if  (strcmp(optarg, "year") == 0)   { timestep = YEAR;  } 
+            else {
                 std::cerr << "Invalid timestep argument. Use 'day', 'week', 'month', or 'year'.\n";
                 return 1;
             }
@@ -70,16 +71,13 @@ int main(int argc, char* argv[]) {
     
     // write out data 
     write_csv(wealth_data, "temp.csv"); 
-    
-
-
     return 0; 
 }
 
 
 
 
-Agent::Agent(int age, double wealth, double wage_param, double annual_ROI, 
+Agent::Agent(double age, double wealth, double wage_param, double annual_ROI, 
                 double consumption_param, double min_consumption) : 
         age(age), wealth(wealth), wage_param(wage_param), annual_ROI(annual_ROI), 
         consumption_param(consumption_param), min_consumption(min_consumption) {}; 
@@ -87,12 +85,22 @@ Agent::Agent(int age, double wealth, double wage_param, double annual_ROI,
 
 
 void Agent::update() {
-    double temp = wealth * std::pow(1 + annual_ROI, 1 / )
+    double wage_income = wage_param * (0.667 + 0.0133 * age) / timestep; 
+    wealth = wealth * std::pow(1 + annual_ROI, 1 / timestep) + wage_income; 
+    double consumption = std::max( 
+            min_consumption / timestep, 
+            wealth / (timestep * (1 + consumption_param * wealth)) ); 
+    double min_allowed_wealth = -50000 - 2 * wage_income; 
+
+    wealth = std::max(min_allowed_wealth, wealth - consumption); 
+    age += timestep; 
 }
 
+
 void Agent::print() {
-    std::cout << "Agent:\t wealth: " << wealth << ",\twage: " << wage << ",\tavg_return: " 
-    << avg_return << ",\tc_param: " << c_param << std::endl; 
+    double annual_wage = wage_param * (0.667 + 0.0133 * age); 
+    std::cout << "Agent:\t age: " << age << "\twealth: " << wealth << ",\twage: " << annual_wage 
+    << ",\tannual ROI: " << annual_ROI << ",\tc_param: " << consumption_param << std::endl; 
 }
 
 

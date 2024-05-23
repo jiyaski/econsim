@@ -6,13 +6,13 @@
 
 class Agent {
 public: 
-    Agent(int age, double wealth, double wage, double annual_ROI, 
+    Agent(double age, double wealth, double wage, double annual_ROI, 
             double consumption_param, double min_consumption); 
 
     void update(); 
     void print(); 
 
-    int age; 
+    double age; 
     double wealth; 
     double wage_param; 
     double annual_ROI; 
