@@ -2,19 +2,31 @@
 #include "distributions.h" 
 
 #include <iostream>
+#include <string>
 
 
 class Agent {
 public: 
-    Agent(double init_wealth, double wage, double avg_return, double consumption); 
+    Agent(double age, double wealth, double wage, double annual_ROI, 
+            double consumption_param, double min_consumption); 
 
     void update(); 
-    void print(); 
+    std::string toString(); 
 
+    double age; 
     double wealth; 
-    double wage; 
-    double avg_return; 
-    double c_param;    // consumption param
+    double wage_param; 
+    double annual_ROI; 
+    double consumption_param; 
+    double min_consumption; 
+}; 
+
+
+enum Timestep {
+    DAY = 365, 
+    WEEK = 52, 
+    MONTH = 12, 
+    YEAR = 1
 }; 
 
 
