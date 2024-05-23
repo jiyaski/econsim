@@ -7,6 +7,8 @@
 
 class Agent {
 public: 
+
+    Agent(); 
     Agent(double age, double wealth, double wage, double annual_ROI, 
             double consumption_param, double min_consumption); 
 
