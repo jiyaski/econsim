@@ -2,6 +2,7 @@
 #include "main.h"
 
 #include <string>
+#include <cstring>
 #include <fstream> 
 #include <iostream> 
 #include <vector>
@@ -13,35 +14,54 @@ int main(int argc, char* argv[]) {
     RandomSampler randomSampler; 
     std::vector<Agent> agents; 
     int num_agents = 100;   // defaults if no CLI arg provided 
-    int max_timestep = 50;  // 
+    int timestep = YEAR;    // 
+    int lifetime = 50;      // 
 
     // parse CLI args 
     int opt; 
-    while ((opt = getopt(argc, argv, "n:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "n:t:l:")) != -1) {
         switch (opt) {
         case 'n': 
             num_agents = std::atoi(optarg); 
             break; 
         case 't': 
-            max_timestep = std::atoi(optarg); 
+            if (strcmp(optarg, "day") == 0) {
+                timestep = DAY;
+            } else if (strcmp(optarg, "week") == 0) {
+                timestep = WEEK;
+            } else if (strcmp(optarg, "month") == 0) {
+                timestep = MONTH;
+            } else if (strcmp(optarg, "year") == 0) {
+                timestep = YEAR;
+            } else {
+                std::cerr << "Invalid timestep argument. Use 'day', 'week', 'month', or 'year'.\n";
+                return 1;
+            }
+        case 'l': 
+            lifetime = std::atoi(optarg); 
             break; 
+        default:
+            std::cerr << "Usage: " << argv[0] << " [-n num_agents] [-t timestep] [-l lifetime]\n";
+            return 1;
         }
     }
 
     // initialize agents 
     for (int i = 0; i < num_agents; i++) {
         Agent agent(
-            randomSampler.generateWealth(), 
+            randomSampler.generateAge(), 
+            randomSampler.generateInitWealth(), 
             randomSampler.generateWage(), 
-            randomSampler.generateAvgReturn(), 
-            randomSampler.generateConsumption()
+            randomSampler.generateAnnualROI(), 
+            randomSampler.generateConsumption(), 
+            randomSampler.generateMinConsumption()
         ); 
         agents.push_back(agent); 
     }
 
     // run simulation and collect results 
-    std::vector<std::vector<double>> wealth_data(max_timestep, std::vector<double>(num_agents)); 
-    for (int t = 0; t < max_timestep; t++) {
+    std::vector<std::vector<double>> wealth_data(lifetime, std::vector<double>(num_agents)); 
+    for (int t = 0; t < lifetime; t++) {
         for (int i = 0; i < num_agents; i++) {
             wealth_data.at(t).at(i) = agents.at(i).wealth; 
             agents.at(i).update(); 
@@ -59,13 +79,15 @@ int main(int argc, char* argv[]) {
 
 
 
+Agent::Agent(int age, double wealth, double wage_param, double annual_ROI, 
+                double consumption_param, double min_consumption) : 
+        age(age), wealth(wealth), wage_param(wage_param), annual_ROI(annual_ROI), 
+        consumption_param(consumption_param), min_consumption(min_consumption) {}; 
 
-Agent::Agent(double init_wealth, double wage, double avg_return, double c_param) : 
-        wealth(init_wealth), wage(wage), avg_return(avg_return), c_param(c_param) {}; 
+
 
 void Agent::update() {
-    // todo: make documentation for why this is the update rule 
-    wealth = wealth * (1 - (1 / (1 + c_param * wealth))) * (1 + avg_return) + wage; 
+    double temp = wealth * std::pow(1 + annual_ROI, 1 / )
 }
 
 void Agent::print() {
