@@ -10,21 +10,25 @@
 #include <unistd.h>
 
 
+static constexpr double MAX_DEBT_WAGE_MULTIPLIER = 1.5; 
+int num_agents; 
 int timestep; 
 int lifetime; 
+bool debug; 
 
 
 int main(int argc, char* argv[]) {
 
     RandomSampler randomSampler; 
     std::vector<Agent> agents; 
-    int num_agents = 100;   // defaults if no CLI arg provided 
+    num_agents = 1000;      // defaults if no CLI arg provided 
     timestep = YEAR;        // 
     lifetime = 50;          // 
+    debug = false;          // 
 
     // parse CLI args 
     int opt; 
-    while ((opt = getopt(argc, argv, "n:t:l:")) != -1) {
+    while ((opt = getopt(argc, argv, "n:t:l:d")) != -1) {
         switch (opt) {
         case 'n': 
             num_agents = std::atoi(optarg); 
@@ -38,8 +42,12 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Invalid timestep argument. Use 'day', 'week', 'month', or 'year'.\n";
                 return 1;
             }
+            break; 
         case 'l': 
             lifetime = std::atoi(optarg); 
+            break; 
+        case 'd': 
+            debug = true; 
             break; 
         default:
             std::cerr << "Usage: " << argv[0] << " [-n num_agents] [-t timestep] [-l lifetime]\n";
@@ -61,12 +69,15 @@ int main(int argc, char* argv[]) {
     }
 
     // run simulation and collect results 
+    std::vector<double> curr(num_agents); 
     std::vector<std::vector<double>> wealth_data(lifetime, std::vector<double>(num_agents)); 
-    for (int t = 0; t < lifetime; t++) {
+    for (int t = 0; t < lifetime * timestep; t++) {
         for (int i = 0; i < num_agents; i++) {
-            wealth_data.at(t).at(i) = agents.at(i).wealth; 
+            curr.at(i) = agents.at(i).wealth; 
             agents.at(i).update(); 
         }
+        if (t % timestep == 0) { wealth_data.at(t / timestep) = curr; } 
+        if (debug) { std::cout << "t=" << t << ":\t\t" << agents.at(0).toString() << std::endl; } 
     }
     
     // write out data 
@@ -76,31 +87,32 @@ int main(int argc, char* argv[]) {
 
 
 
-
 Agent::Agent(double age, double wealth, double wage_param, double annual_ROI, 
                 double consumption_param, double min_consumption) : 
         age(age), wealth(wealth), wage_param(wage_param), annual_ROI(annual_ROI), 
         consumption_param(consumption_param), min_consumption(min_consumption) {}; 
 
 
-
 void Agent::update() {
-    double wage_income = wage_param * (0.667 + 0.0133 * age) / timestep; 
-    wealth = wealth * std::pow(1 + annual_ROI, 1 / timestep) + wage_income; 
+    double annual_wage = wage_param * (0.6667 + 0.01333 * age); 
+    wealth = wealth * std::pow(1 + annual_ROI, 1 / timestep) + annual_wage / timestep; 
     double consumption = std::max( 
             min_consumption / timestep, 
             wealth / (timestep * (1 + consumption_param * wealth)) ); 
-    double min_allowed_wealth = -50000 - 2 * wage_income; 
+    double min_allowed_wealth = -MAX_DEBT_WAGE_MULTIPLIER * annual_wage; 
 
     wealth = std::max(min_allowed_wealth, wealth - consumption); 
-    age += timestep; 
+    age += 1 / static_cast<float>(timestep); 
 }
 
 
-void Agent::print() {
+std::string Agent::toString() {
     double annual_wage = wage_param * (0.667 + 0.0133 * age); 
-    std::cout << "Agent:\t age: " << age << "\twealth: " << wealth << ",\twage: " << annual_wage 
-    << ",\tannual ROI: " << annual_ROI << ",\tc_param: " << consumption_param << std::endl; 
+    return "Agent:\t age: " + std::to_string(age) +
+        "\twealth: "        + std::to_string(wealth) +
+        ",\twage: "         + std::to_string(annual_wage) +
+        ",\tannual ROI: "   + std::to_string(annual_ROI) +
+        ",\tc_param: "      + std::to_string(consumption_param);
 }
 
 

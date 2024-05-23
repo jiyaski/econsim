@@ -2,6 +2,7 @@
 #include "distributions.h" 
 
 #include <iostream>
+#include <string>
 
 
 class Agent {
@@ -10,7 +11,7 @@ public:
             double consumption_param, double min_consumption); 
 
     void update(); 
-    void print(); 
+    std::string toString(); 
 
     double age; 
     double wealth; 

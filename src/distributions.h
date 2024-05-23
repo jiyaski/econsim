@@ -20,8 +20,8 @@ private:
     // const values are generally empirically determined by separate data analysis 
     static constexpr double AGE_MIN = 0; 
     static constexpr double AGE_MAX = 50; 
-    static constexpr double MIN_CONSUMPTION_MU = 9.2103; 
-    static constexpr double MIN_CONSUMPTION_SIGMA = 0.69078; 
+    static constexpr double MIN_CONSUMPTION_MU = 9.7860; 
+    static constexpr double MIN_CONSUMPTION_SIGMA = 0.46052; 
     static constexpr double CONSUMPTION_MIN = 0.0000005;
     static constexpr double CONSUMPTION_MAX = 0.000005;
     static constexpr double ROI_MEAN = 0.06;

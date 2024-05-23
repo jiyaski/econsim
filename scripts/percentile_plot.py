@@ -1,6 +1,7 @@
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import sys
 
 
@@ -31,17 +32,21 @@ def calculate_percentiles(data, num_percentiles=100):
     for i in range(num_percentiles + 1):
         index = int(np.ceil((i / num_percentiles) * (len(data) - 1)))
         percentiles.append(data[index])
+    
+    percentiles[0] = 0    # bc percentiles are only meaningful from 1-99
+    percentiles[100] = 0 
     return percentiles
 
 
 def plot_histogram(percentiles, plot_filepath):
     plt.figure(figsize=(10, 6))
     plt.bar(range(101), percentiles, width=1.0)
-    plt.xlabel('Percentiles')
+    plt.xlabel('Percentiles') 
+    plt.gca().xaxis.set_major_locator(ticker.MultipleLocator(10))
     plt.ylabel('Net Worth')
-    plt.yscale('log') 
+    plt.yscale('symlog', linthresh=100, linscale=0.5) 
     plt.title('Wealth Distribution Percentiles') 
-    plt.grid() 
+    plt.grid(alpha=0.7) 
     plt.savefig(plot_filepath)
     plt.close()
 

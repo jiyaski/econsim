@@ -27,15 +27,12 @@ mae = mean_absolute_error(percentiles_np, fitted_values)
 plt.figure(figsize=(10, 6))
 plt.plot(z_scores, percentiles, marker='o', linestyle='-', color='b', label='Data')
 plt.plot(z_scores, fitted_values, color='r', linestyle='--', label=f'Fit: y = {coefficients[0]:.2f}x + {coefficients[1]:.2f}')
-
-# Add title and labels
 plt.title('Z-Scores vs. Log-Transformed Percentiles with Linear Regression')
 plt.xlabel('Z-Scores')
 plt.ylabel('Log-Transformed Percentiles')
 plt.grid(True)
 plt.legend()
 plt.savefig("results/fit_lognorm_2_plot.png")
-
 
 # print output 
 print("Fit for the underlying normal distribution: ")
@@ -49,4 +46,3 @@ print(f"Mean absolute error: {mae}")
 #      becomes 1, its log will be 0 - much less than the next smaller value. This is a distortion to the otherwise 
 #      largely linear relationship. To minimize this distortion, we shift by double the amount, so that the 
 #      magnitude of the min value is the same as in the original data 
-
