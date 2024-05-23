@@ -11,7 +11,7 @@
 
 RandomSampler randomSampler; 
 
-static constexpr double MAX_DEBT_WAGE_MULTIPLIER = 1.5; 
+static constexpr double MAX_DEBT_WAGE_MULTIPLIER = 1.8; 
 int num_agents; 
 int timestep; 
 int lifetime; 
@@ -65,17 +65,27 @@ int main(int argc, char* argv[]) {
     std::vector<double> curr(num_agents); 
     std::vector<std::vector<double>> wealth_data(lifetime, std::vector<double>(num_agents)); 
     for (int t = 0; t < lifetime * timestep; t++) {
+
         for (int i = 0; i < num_agents; i++) {
             Agent& agent = agents.at(i); 
+
+            // retire & respawn agents who get too old 
+            if (agent.age > lifetime) {
+                Agent new_agent; 
+                agent = new_agent; 
+            }
+
             curr.at(i) = agent.wealth; 
             agent.update(); 
         }
+
+        // record results 
         if (t % timestep == 0) { wealth_data.at(t / timestep) = curr; } 
         if (debug) { std::cout << "t=" << t << ":\t\t" << agents.at(0).toString() << std::endl; } 
     }
     
     // write out data 
-    write_csv(wealth_data, "temp.csv"); 
+    write_csv(wealth_data, "data/results.csv"); 
     return 0; 
 }
 
