@@ -20,14 +20,14 @@ private:
     // const values are generally empirically determined by separate data analysis, then tweaked 
     static constexpr double AGE_MIN = 0; 
     static constexpr double AGE_MAX = 50; 
-    static constexpr double MIN_CONSUMPTION_MU = 9.3360;          // 9.7860 
-    static constexpr double MIN_CONSUMPTION_SIGMA = 0.46052; 
-    static constexpr double CONSUMPTION_MIN = 0.0000006;         // 5
-    static constexpr double CONSUMPTION_MAX = 0.000006;           // 5
+    static constexpr double MIN_CONSUMPTION_MU = 9.7860;          // 9.7860 
+    static constexpr double MIN_CONSUMPTION_SIGMA = 0.46052;      // 0.46052
+    static constexpr double CONSUMPTION_MIN = 0.0000005;         // 0.0000005
+    static constexpr double CONSUMPTION_MAX = 0.000005;           // 0.000005
     static constexpr double ROI_MEAN = 0.06;                     // 0.06
-    static constexpr double ROI_STDEV = 0.05;                     // 0.03
-    static constexpr double WAGE_MU = 10.954; 
-    static constexpr double WAGE_SIGMA = 1.3064;                  // 0.7564
+    static constexpr double ROI_STDEV = 0.03;                     // 0.03
+    static constexpr double WAGE_MU = 10.954;                      // 10.954
+    static constexpr double WAGE_SIGMA = 0.7564;                  // 0.7564
     static constexpr double INIT_WEALTH_MU = 10.412;              // 10.412 
     static constexpr double INIT_WEALTH_SIGMA = 1.0273;             // 1.0273 
     static constexpr double INIT_WEALTH_10TH_PERCENTILE = -11270; 
@@ -38,7 +38,7 @@ private:
     std::uniform_real_distribution<> dist_age; 
     std::lognormal_distribution<> dist_min_consumption; 
     std::uniform_real_distribution<> dist_consumption;
-    std::normal_distribution<> dist_avg_return;
+    std::normal_distribution<> dist_annual_ROI;
     std::lognormal_distribution<> dist_wage;
     std::normal_distribution<> dist_init_wealth;  // actual dist is lognormal but requires manual processing 
 };
