@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
 }
 
 
-void add_good(std::mt19937 gen) {
+void add_good(std::mt19937& gen) {
 
     // a + rand*(b-a) transforms the uniform distribution to produce rand outputs between a and b 
     std::uniform_real_distribution<> dist(0, 1); 

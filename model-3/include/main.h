@@ -39,5 +39,5 @@ struct SimConfig {
     std::string to_string() const; 
 }; 
 
-void add_good(std::mt19937 gen); 
+void add_good(std::mt19937& gen); 
 void parse_options(int argc, char* argv[]); 
