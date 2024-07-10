@@ -1,7 +1,7 @@
 
+#include "pch.h"
 #include "main.h" 
-#include <boost/program_options.hpp> 
-#include <Eigen/Dense> 
+
 #include <cstring>
 #include <iostream> 
 #include <fstream>
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
         add_good(gen); 
         std::cout << Elas << "\n\n"; 
     }
-    
+    std::cout << "temp test thing 2";
 
 
     return 0;
