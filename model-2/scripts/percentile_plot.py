@@ -19,7 +19,6 @@ def read_csv_line(file_path, line_number):
 def read_csv_vertical(file_path): 
     df = pd.read_csv(file_path, sep='\t', engine='python') 
     values = df.iloc[:,1].tolist() 
-    print(df)
     return [0] + values + [0]  # must add padding for 0th & 100th percentiles 
 
 

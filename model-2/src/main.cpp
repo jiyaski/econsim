@@ -11,7 +11,7 @@
 
 RandomSampler randomSampler; 
 
-static constexpr double MAX_DEBT_WAGE_MULTIPLIER = 1.8; 
+static constexpr double MAX_DEBT_WAGE_MULTIPLIER = 1.5; 
 int num_agents; 
 int timestep; 
 int lifetime; 
@@ -72,6 +72,7 @@ int main(int argc, char* argv[]) {
             // retire & respawn agents who get too old 
             if (agent.age > lifetime) {
                 Agent new_agent; 
+                new_agent.age = 0; 
                 agent = new_agent; 
             }
 
@@ -108,22 +109,23 @@ Agent::Agent(double age, double wealth, double wage_param, double annual_ROI,
 
 
 void Agent::update() {
+    double timedelta = 1 / static_cast<float>(timestep); 
     double annual_wage = wage_param * (0.6667 + 0.01333 * age); 
-    wealth = wealth * std::pow(1 + annual_ROI, 1 / timestep) + annual_wage / timestep; 
+    wealth = wealth * std::pow(1 + annual_ROI, timedelta) + annual_wage / timestep; 
     double consumption = std::max( 
             min_consumption / timestep, 
             wealth / (timestep * (1 + consumption_param * wealth)) ); 
     double min_allowed_wealth = -MAX_DEBT_WAGE_MULTIPLIER * annual_wage; 
 
     wealth = std::max(min_allowed_wealth, wealth - consumption); 
-    age += 1 / static_cast<float>(timestep); 
+    age += timedelta; 
 }
 
 
 std::string Agent::toString() {
     double annual_wage = wage_param * (0.667 + 0.0133 * age); 
-    return "Agent:\t age: " + std::to_string(age) +
-        "\twealth: "        + std::to_string(wealth) +
+    return "age: "          + std::to_string(age) +
+        ",\twealth: "       + std::to_string(wealth) +
         ",\twage: "         + std::to_string(annual_wage) +
         ",\tannual ROI: "   + std::to_string(annual_ROI) +
         ",\tc_param: "      + std::to_string(consumption_param);
