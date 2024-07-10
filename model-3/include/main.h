@@ -40,4 +40,5 @@ struct SimConfig {
 }; 
 
 void add_good(std::mt19937& gen); 
+void remove_good(int k); 
 void parse_options(int argc, char* argv[]); 

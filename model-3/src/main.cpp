@@ -19,6 +19,7 @@ Eigen::VectorXd prices_0(0);
 Eigen::MatrixXd Elas(0, 0);  // elasticity matrix 
 Eigen::MatrixXd Elas_Inv(0, 0); 
 Eigen::Matrix<double,Eigen::Dynamic,4> Prod_Costs(0, 4); 
+int N;  // number of firms 
 
 
 
@@ -30,13 +31,18 @@ int main(int argc, char* argv[]) {
     std::cout << sim.to_string() << std::endl; 
 
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(rd()); 
+    N = 0; 
 
     for (int i = 0; i < 8; i++) {
         add_good(gen); 
         std::cout << Elas << "\n\n"; 
     }
-    std::cout << "temp test thing 2";
+    
+    remove_good(3); 
+    std::cout << "-------------------------------\n" << Elas << "\n\n"; 
+    remove_good(6); 
+    std::cout << Elas << "\n\n"; 
 
 
     return 0;
@@ -49,7 +55,6 @@ void add_good(std::mt19937& gen) {
     std::uniform_real_distribution<> dist(0, 1); 
 
     // generate new entry for quants_0 and prices_0 vectors 
-    int N = Elas.rows(); 
     double MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)); 
     double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)); 
     double quant_0 = 2 * r; 
@@ -90,8 +95,41 @@ void add_good(std::mt19937& gen) {
 
     double c2 = -3 * c3 * vertex_x; 
     double c1 = vertex_y + 3 * c3 * vertex_x  * vertex_x; 
-    Prod_Costs.conservativeResize(Prod_Costs.rows() + 1, Eigen::NoChange); 
-    Prod_Costs.row(Prod_Costs.rows() - 1) << c0, c1, c2, c3; 
+    Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
+    Prod_Costs.row(N) << c0, c1, c2, c3; 
+
+    N++; 
+}
+
+
+void remove_good(int k) {
+
+    Eigen::VectorXd quants_temp(N - 1); 
+    Eigen::VectorXd prices_temp(N - 1); 
+    Eigen::VectorXd quants_0_temp(N - 1); 
+    Eigen::VectorXd prices_0_temp(N - 1); 
+    Eigen::MatrixXd Elas_temp_1(N, N - 1); 
+    Eigen::MatrixXd Elas_temp_2(N - 1, N - 1); 
+    Eigen::Matrix<double, Eigen::Dynamic, 4> Prod_Costs_temp(N - 1, 4); 
+
+    quants_temp << quants.head(k), quants.tail(N - k - 1); 
+    prices_temp << prices.head(k), prices.tail(N - k - 1); 
+    quants_0_temp << quants_0.head(k), quants_0.tail(N - k - 1); 
+    prices_0_temp << prices_0.head(k), prices_0.tail(N - k - 1); 
+    Elas_temp_1 << Elas.leftCols(k), Elas.rightCols(N - k - 1); 
+    Elas_temp_2 << Elas_temp_1.topRows(k), Elas_temp_1.bottomRows(N - k - 1); 
+    Prod_Costs_temp << Prod_Costs.topRows(k), Prod_Costs.bottomRows(N - k - 1); 
+
+    quants = quants_temp; 
+    prices = prices_temp; 
+    quants_0 = quants_0_temp; 
+    prices_0 = prices_0_temp; 
+    Elas = Elas_temp_2; 
+    Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(Elas); 
+    Elas_Inv = cod.pseudoInverse(); 
+    Prod_Costs = Prod_Costs_temp; 
+
+    N--; 
 }
 
 

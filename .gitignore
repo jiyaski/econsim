@@ -1,5 +1,9 @@
-results/
+model-2/results/
+model-3/bin/*
+model-3/obj/*
+
 *temp
 temp*
-econsim 
+*/econsim
 *.o
+*.gch
