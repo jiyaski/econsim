@@ -65,8 +65,8 @@ void add_good(std::mt19937& gen) {
         price_0 = prices_0(0); 
         MPS = quant_0 * price_0 / 2; 
     } else {
-        MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)); 
-        double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)); 
+        MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)) / sim.timestep; 
+        double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)) / sim.timestep; 
         quant_0 = 2 * r; 
         price_0 = MPS / r; 
     }
@@ -134,7 +134,7 @@ void add_good(std::mt19937& gen) {
         double c2 = -3 * c3 * vertex_x; 
         double c1 = vertex_y + 3 * c3 * vertex_x  * vertex_x; 
         Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
-        Prod_Costs.row(N) << c0, c1, c2, c3; 
+        Prod_Costs.row(N) << c0 / sim.timestep, c1 / sim.timestep, c2 / sim.timestep, c3 / sim.timestep; 
     }
 
     N++; 
