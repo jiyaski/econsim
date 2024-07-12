@@ -28,52 +28,86 @@ int N;  // number of firms
 int main(int argc, char* argv[]) {
 
     parse_options(argc, argv);
-    std::cout << sim.to_string() << std::endl; 
+    std::cout << sim.to_string() << "\n\n"; 
 
     std::random_device rd;
     std::mt19937 gen(rd()); 
     N = 0; 
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < sim.num_firms; i++) {
         add_good(gen); 
-        std::cout << Elas << "\n\n"; 
     }
-    
-    remove_good(3); 
-    std::cout << "-------------------------------\n" << Elas << "\n\n"; 
-    remove_good(6); 
-    std::cout << Elas << "\n\n"; 
+
+    std::cout << "Elasticities: --------------------------------\n" << Elas 
+            << "\n\nquants_0: " << quants_0.transpose() 
+            << "\n\nprices_0: " << prices_0.transpose() 
+            << "\n\nProd_Costs: \n" << Prod_Costs << "\n\n"; 
 
 
     return 0;
 }
 
 
+/**
+ * adds a good to the market. 
+ * 
+ * @param gen - pseudorandom generator to use for initializing the good's properties 
+ */
 void add_good(std::mt19937& gen) {
 
     // a + rand*(b-a) transforms the uniform distribution to produce rand outputs between a and b 
     std::uniform_real_distribution<> dist(0, 1); 
 
     // generate new entry for quants_0 and prices_0 vectors 
-    double MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)); 
-    double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)); 
-    double quant_0 = 2 * r; 
-    double price_0 = MPS / r; 
+    double quant_0, price_0, MPS; 
+    if (sim.uniform_demand && N >= 1) {
+        quant_0 = quants_0(0); 
+        price_0 = prices_0(0); 
+        MPS = quant_0 * price_0 / 2; 
+    } else {
+        MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)); 
+        double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)); 
+        quant_0 = 2 * r; 
+        price_0 = MPS / r; 
+    }
     quants_0.conservativeResize(N + 1); 
     prices_0.conservativeResize(N + 1); 
     quants_0(N) = quant_0; 
     prices_0(N) = price_0; 
 
+
     // add new row/col to Elasticity matrix & recalculate its inverse 
-    double ela_ii = quant_0 / price_0;  // diagonal entry of elasticity matrix for this good's row 
+    
+    double ela_ii = sim.flat_demand ? 0 : quant_0 / price_0; 
     Elas.conservativeResize(N+1, N+1); 
     Elas(N, N) = ela_ii; 
-    for (int i = 0; i < N; i++) {
+
+    for (int i = 0; i < N; i++) { 
+        if (sim.flat_demand || sim.compl_sign == "zero") { 
+            Elas(N, i) = 0; 
+            Elas(i, N) = 0;
+            continue; 
+        }
+
+        // if sim.compl_sign = "pos", we'll just leave these values as they are
         Elas(N, i) =  (sim.compl_min + dist(gen) * (sim.compl_max - sim.compl_min)) * ela_ii; 
         Elas(i, N) = ((sim.compl_min + dist(gen) * (sim.compl_max - sim.compl_min)) * Elas(i, i)); 
+
+        if (sim.compl_sign == "neg") {
+            Elas(N, i) = -Elas(N, i); 
+            Elas(i, N) = -Elas(i, N); 
+        } 
+        else if (sim.compl_sign == "any") {
+            double rand = dist(gen); 
+            if (rand < 0.25)       { /* do nothing */ } 
+            else if (rand < 0.5)   { Elas(N, i) = -Elas(N, i); } 
+            else if (rand < 0.75)  { Elas(i, N) = -Elas(i, N); } 
+            else                   { Elas(N, i) = -Elas(N, i);    Elas(i, N) = -Elas(i, N); }
+        }
     }
     Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(Elas); 
     Elas_Inv = cod.pseudoInverse(); 
+
 
     quants.conservativeResize(N + 1); 
     prices.conservativeResize(N + 1); 
@@ -81,27 +115,37 @@ void add_good(std::mt19937& gen) {
     prices(N) = Elas_Inv.row(N).dot(quants_0 - quants);
 
     // generate new production cost parameters (c0->fixed costs; c1->linear costs; c2->quadratic; c3->cubic) 
-    double c0 = dist(gen) * MPS / 5; 
-    double c3 = dist(gen) * 16 / 3 * price_0 / (quant_0*quant_0); 
-    std::vector<double> intervals = {0.0, quant_0}; 
-    std::vector<double> weights = {1.0, 0.0};  // max probability at 0, decreasing to zero at quant_0 
-    std::piecewise_linear_distribution<> dist2(intervals.begin(), intervals.end(), weights.begin()); 
+    if (sim.uniform_costs && N >= 1) {
+        Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
+        Prod_Costs.row(N) = Prod_Costs.row(0); 
+    } else {
+        double c0 = dist(gen) * MPS / 5; 
+        double c3 = dist(gen) * 16 / 3 * price_0 / (quant_0*quant_0); 
+        std::vector<double> intervals = {0.0, quant_0}; 
+        std::vector<double> weights = {1.0, 0.0};  // max probability at 0, decreasing to zero at quant_0 
+        std::piecewise_linear_distribution<> dist2(intervals.begin(), intervals.end(), weights.begin()); 
 
-    double vertex_x = dist2(gen); 
-    Eigen::VectorXd quants_temp = quants; 
-    quants_temp(N) = vertex_x; 
-    double vertex_y_max = Elas_Inv.row(N).dot(quants_0 - quants_temp); 
-    double vertex_y = dist(gen) * vertex_y_max; 
+        double vertex_x = dist2(gen); 
+        Eigen::VectorXd quants_temp = quants; 
+        quants_temp(N) = vertex_x; 
+        double vertex_y_max = Elas_Inv.row(N).dot(quants_0 - quants_temp); 
+        double vertex_y = dist(gen) * vertex_y_max; 
 
-    double c2 = -3 * c3 * vertex_x; 
-    double c1 = vertex_y + 3 * c3 * vertex_x  * vertex_x; 
-    Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
-    Prod_Costs.row(N) << c0, c1, c2, c3; 
+        double c2 = -3 * c3 * vertex_x; 
+        double c1 = vertex_y + 3 * c3 * vertex_x  * vertex_x; 
+        Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
+        Prod_Costs.row(N) << c0, c1, c2, c3; 
+    }
 
     N++; 
 }
 
 
+/**
+ * removes a good from the market. 
+ * 
+ * @param k - index of the good to remove
+ */
 void remove_good(int k) {
 
     Eigen::VectorXd quants_temp(N - 1); 
