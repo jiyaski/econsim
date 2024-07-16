@@ -7,6 +7,7 @@
 #include <fstream>
 #include <vector> 
 #include <unistd.h>
+#include <memory>
 
 
 namespace po = boost::program_options;
@@ -21,14 +22,14 @@ Eigen::MatrixXd Elas_Inv(0, 0);
 Eigen::Matrix<double,Eigen::Dynamic,4> Prod_Costs(0, 4); 
 int N;  // number of firms 
 
-
+std::vector<std::unique_ptr<Firm>> firms; 
 
 
 
 int main(int argc, char* argv[]) {
 
     parse_options(argc, argv);
-    std::cout << sim.to_string() << "\n\n"; 
+    std::cout << "\n" << sim.to_string() << "\n\n"; 
 
     std::random_device rd;
     std::mt19937 gen(rd()); 
@@ -42,9 +43,92 @@ int main(int argc, char* argv[]) {
             << "\n\nquants_0: " << quants_0.transpose() 
             << "\n\nprices_0: " << prices_0.transpose() 
             << "\n\nProd_Costs: \n" << Prod_Costs << "\n\n"; 
+    
+    for (int i = 0; i < 10; i++) {
+        step(); 
+        std::cout << "profits (t=" << i << "): \t" << profits_as_str() << "\n"; 
+    }
+    std::cout << std::endl; 
 
 
     return 0;
+}
+
+
+void step() {
+
+    for (int i = 0; i < N; i++) {
+
+        // remove any firms that have been unprofitable long enough to exit 
+        if (firms.at(i)->exit_counter > 3 * sim.timestep) {
+            remove_good(i); 
+            continue; 
+        }
+
+        // find the optimal production quantity. a0, a1, a2 are params of the quadratic equation MC = MR 
+        double opt_quant; 
+        double marginal_revenue = Elas_Inv.row(i).dot(quants_0 - quants) - quants(i) / Elas(i, i); 
+        double a2 = 3 * Prod_Costs(i, 3); 
+        double a1 = 2 * Prod_Costs(i, 2); 
+        double a0 = Prod_Costs(i, 1) - marginal_revenue; 
+        double discriminant = a1 * a1 - 4 * a2 * a0; 
+
+        // no real roots -> MC > MR always -> shutdown production; otherwise use rightmost root 
+        if (discriminant <= 0) { opt_quant = 0; } 
+        else { opt_quant = (-a1 + sqrt(discriminant)) / (2 * a2); } 
+
+        // calculate stuff based on optimal quantity, to make shutdown/exit decisions 
+        double opt_cost = calculate_cost(i, opt_quant); 
+        double opt_avg_total_cost = (opt_quant != 0) ? (opt_cost / opt_quant) : 0; 
+        double opt_avg_var_cost = (opt_quant != 0) ? ((opt_cost - Prod_Costs(i, 0)) / opt_quant) : 0; 
+        Eigen::VectorXd temp_quants = quants; 
+        temp_quants(i) = opt_quant; 
+        double opt_price = Elas_Inv.row(i).dot(quants_0 - temp_quants); 
+
+        // shutdown/exit logic 
+        if (opt_price < opt_avg_var_cost) { opt_quant = 0; } 
+        if (opt_price < opt_avg_total_cost) { firms.at(i)->exit_counter++; } 
+
+        // calculate actual next quantity; recalculate other stuff based on it 
+        quants(i) = std::min(opt_quant, quants(i) + quants_0(i) / 365 / 2); 
+        prices(i) = Elas_Inv.row(i).dot(quants_0 - quants); 
+        double cost = calculate_cost(i, quants(i)); 
+        double avg_total_cost = (quants(i) != 0) ? (cost / quants(i)) : 0; 
+        double avg_var_cost = (quants(i) != 0) ? ((cost - Prod_Costs(i, 0)) / quants(i)) : 0; 
+        
+        // calculate relevant data to store 
+        double profit = (prices(i) - avg_total_cost) * quants(i); 
+        // todo: calculate consumer surplus & deadweight loss (need numerical integration) 
+
+        // update firm 
+        firms.at(i)->profit += profit; 
+    }
+}
+
+
+/**
+ * cost of producing a given quantity of the `i`th good 
+ * 
+ * @param ind - index of the good's row in the Prod_Costs matrix 
+ * @param quantity - quantity of the good that would be produced 
+ */
+double calculate_cost(int ind, double quantity) {
+    double q_term = 1; 
+    double result = 0; 
+    for (int i = 0; i <= 3; i++) {
+        result += Prod_Costs(ind, i) * q_term; 
+        q_term *= quantity; 
+    }
+    return result / sim.timestep; 
+}
+
+
+std::string profits_as_str() {
+    std::string result = ""; 
+    for (const auto& firm : firms) {
+        result += std::to_string(firm->profit) + " \t"; 
+    }
+    return result; 
 }
 
 
@@ -76,8 +160,7 @@ void add_good(std::mt19937& gen) {
     prices_0(N) = price_0; 
 
 
-    // add new row/col to Elasticity matrix & recalculate its inverse 
-    
+    //// add new row/col to Elasticity matrix & recalculate its inverse 
     double ela_ii = sim.flat_demand ? 0 : quant_0 / price_0; 
     Elas.conservativeResize(N+1, N+1); 
     Elas(N, N) = ela_ii; 
@@ -108,7 +191,7 @@ void add_good(std::mt19937& gen) {
     Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(Elas); 
     Elas_Inv = cod.pseudoInverse(); 
 
-
+    // update quantity & price vectors
     quants.conservativeResize(N + 1); 
     prices.conservativeResize(N + 1); 
     quants(N) = 0; 
@@ -137,6 +220,7 @@ void add_good(std::mt19937& gen) {
         Prod_Costs.row(N) << c0 / sim.timestep, c1 / sim.timestep, c2 / sim.timestep, c3 / sim.timestep; 
     }
 
+    firms.push_back(std::make_unique<Firm>(Firm{})); 
     N++; 
 }
 
@@ -173,9 +257,9 @@ void remove_good(int k) {
     Elas_Inv = cod.pseudoInverse(); 
     Prod_Costs = Prod_Costs_temp; 
 
+    firms.erase(firms.begin() + k); 
     N--; 
 }
-
 
 
 void parse_options(int argc, char* argv[]) {

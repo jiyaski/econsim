@@ -39,6 +39,18 @@ struct SimConfig {
     std::string to_string() const; 
 }; 
 
+
+struct Firm { 
+    double profit = 0; 
+    double deadweight_loss = 0; 
+    double consumer_surplus = 0; 
+    int exit_counter = 0; 
+}; 
+
+
+void step(); 
+double calculate_cost(int ind, double quantity); 
+std::string profits_as_str(); 
 void add_good(std::mt19937& gen); 
 void remove_good(int k); 
 void parse_options(int argc, char* argv[]); 
