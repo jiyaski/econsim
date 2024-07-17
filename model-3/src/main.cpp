@@ -20,7 +20,7 @@ Eigen::VectorXd prices_0(0);
 Eigen::MatrixXd Elas(0, 0);  // elasticity matrix 
 Eigen::MatrixXd Elas_Inv(0, 0); 
 Eigen::Matrix<double,Eigen::Dynamic,4> Prod_Costs(0, 4); 
-int N;  // number of firms 
+size_t N;  // number of firms 
 
 std::vector<std::unique_ptr<Firm>> firms; 
 
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
 
 void step() {
 
-    for (int i = 0; i < N; i++) {
+    for (size_t i = 0; i < N; i++) {
 
         // remove any firms that have been unprofitable long enough to exit 
         if (firms.at(i)->exit_counter > 3 * sim.timestep) {
@@ -78,7 +78,7 @@ void step() {
         else { opt_quant = (-a1 + sqrt(discriminant)) / (2 * a2); } 
 
         // calculate stuff based on optimal quantity, to make shutdown/exit decisions 
-        double opt_cost = calculate_cost(i, opt_quant); 
+        double opt_cost = get_cost(i, opt_quant); 
         double opt_avg_total_cost = (opt_quant != 0) ? (opt_cost / opt_quant) : 0; 
         double opt_avg_var_cost = (opt_quant != 0) ? ((opt_cost - Prod_Costs(i, 0)) / opt_quant) : 0; 
         Eigen::VectorXd temp_quants = quants; 
@@ -92,7 +92,7 @@ void step() {
         // calculate actual next quantity; recalculate other stuff based on it 
         quants(i) = std::min(opt_quant, quants(i) + quants_0(i) / 365 / 2); 
         prices(i) = Elas_Inv.row(i).dot(quants_0 - quants); 
-        double cost = calculate_cost(i, quants(i)); 
+        double cost = get_cost(i, quants(i)); 
         double avg_total_cost = (quants(i) != 0) ? (cost / quants(i)) : 0; 
         double avg_var_cost = (quants(i) != 0) ? ((cost - Prod_Costs(i, 0)) / quants(i)) : 0; 
         
@@ -103,32 +103,6 @@ void step() {
         // update firm 
         firms.at(i)->profit += profit; 
     }
-}
-
-
-/**
- * cost of producing a given quantity of the `i`th good 
- * 
- * @param ind - index of the good's row in the Prod_Costs matrix 
- * @param quantity - quantity of the good that would be produced 
- */
-double calculate_cost(int ind, double quantity) {
-    double q_term = 1; 
-    double result = 0; 
-    for (int i = 0; i <= 3; i++) {
-        result += Prod_Costs(ind, i) * q_term; 
-        q_term *= quantity; 
-    }
-    return result / sim.timestep; 
-}
-
-
-std::string profits_as_str() {
-    std::string result = ""; 
-    for (const auto& firm : firms) {
-        result += std::to_string(firm->profit) + " \t"; 
-    }
-    return result; 
 }
 
 
@@ -165,7 +139,7 @@ void add_good(std::mt19937& gen) {
     Elas.conservativeResize(N+1, N+1); 
     Elas(N, N) = ela_ii; 
 
-    for (int i = 0; i < N; i++) { 
+    for (size_t i = 0; i < N; i++) { 
         if (sim.flat_demand || sim.compl_sign == "zero") { 
             Elas(N, i) = 0; 
             Elas(i, N) = 0;
@@ -355,4 +329,65 @@ std::string SimConfig::to_string() const {
 }
 
 
+std::string profits_as_str() {
+    std::string result = ""; 
+    for (const auto& firm : firms) {
+        result += std::to_string(firm->profit) + " \t"; 
+    }
+    return result; 
+}
 
+
+
+
+
+double get_price(size_t k, double quantity) {
+    Eigen::VectorXd quants_temp = quants; 
+    quants_temp(k) = quantity; 
+    return Elas_Inv.row(k).dot(quants_0 - quants_temp); 
+}
+
+double get_marginal_revenue(size_t k, double quantity) {
+    double loss_term = (Elas(k, k) != 0) ? (quantity / Elas(k, k)) : 0; 
+    return get_price(k, quantity) - loss_term; 
+}
+
+double get_cost(size_t k, double quantity) {
+    double q_factor = 1; 
+    double result = 0; 
+    for (int i = 0; i <= 3; i++) {
+        result += Prod_Costs(k, i) * q_factor; 
+        q_factor *= quantity; 
+    }
+    return result; 
+}
+
+double get_marginal_cost(size_t k, double quantity) {
+    return Prod_Costs(k, 1) + 2*Prod_Costs(k, 2)*quantity + 3*Prod_Costs(k, 3)*quantity*quantity; 
+}
+
+double get_avg_total_cost(size_t k, double quantity) {
+    return (quantity != 0) ? (get_cost(k, quantity) / quantity) : 0; 
+}
+
+double get_avg_var_cost(size_t k, double quantity) {
+    return (quantity != 0) ? ((get_cost(k, quantity) - Prod_Costs(k, 0)) / quantity) : 0; 
+}
+
+
+double get_opt_quantity(size_t k) {
+    double ela_ii_inv = (Elas(k, k) != 0) ? (1 / Elas(k, k)) : 0; 
+    double a2 = 3 * Prod_Costs(k, 3); 
+    double a1 = 2 * Prod_Costs(k, 2); 
+    double a0 = Prod_Costs(k, 1) + quants(k) * ela_ii_inv - Elas_Inv.row(k).dot(quants_0 - quants); 
+    double discriminant = a1*a1 - 4*a2*a0; 
+    return (discriminant > 0) ? ((-a1 + sqrt(discriminant)) / (2*a2)) : 0; 
+} 
+
+double get_social_opt_quantity(size_t k) {
+    double a2 = 3 * Prod_Costs(k, 3); 
+    double a1 = 2 * Prod_Costs(k, 2); 
+    double a0 = Prod_Costs(k, 1) - Elas_Inv.row(k).dot(quants_0 - quants); 
+    double discriminant = a1*a1 - 4*a2*a0; 
+    return (discriminant > 0) ? ((-a1 + sqrt(discriminant)) / (2*a2)) : 0; 
+}

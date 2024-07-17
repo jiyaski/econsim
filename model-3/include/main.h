@@ -49,8 +49,19 @@ struct Firm {
 
 
 void step(); 
-double calculate_cost(int ind, double quantity); 
-std::string profits_as_str(); 
+
 void add_good(std::mt19937& gen); 
 void remove_good(int k); 
+std::string profits_as_str(); 
 void parse_options(int argc, char* argv[]); 
+
+double get_price(size_t k, double quantity); 
+double get_marginal_revenue(size_t k, double quantity); 
+double get_cost(size_t k, double quantity); 
+double get_marginal_cost(size_t k, double quantity); 
+double get_avg_total_cost(size_t k, double quantity); 
+double get_avg_var_cost(size_t k, double quantity); 
+
+double get_opt_quantity(size_t k); 
+double get_social_opt_quantity(size_t k); 
+
