@@ -46,7 +46,13 @@ int main(int argc, char* argv[]) {
     
     for (int i = 0; i < 10; i++) {
         step(); 
-        std::cout << "profits (t=" << i << "): \t" << profits_as_str() << "\n"; 
+
+        // print firm states after each timestep 
+        std::cout << "(t = " << std::to_string(i) << "):\n"; 
+        for (int j = 0; j < sim.num_firms; j++) {
+            std::cout << "firm " << std::to_string(j) << " --  " << firms.at(j)->to_string() << "\n"; 
+        }
+        std::cout << "-------------------------------------------" << std::endl; 
     }
     std::cout << std::endl; 
 
@@ -65,43 +71,31 @@ void step() {
             continue; 
         }
 
-        // find the optimal production quantity. a0, a1, a2 are params of the quadratic equation MC = MR 
-        double opt_quant; 
-        double marginal_revenue = Elas_Inv.row(i).dot(quants_0 - quants) - quants(i) / Elas(i, i); 
-        double a2 = 3 * Prod_Costs(i, 3); 
-        double a1 = 2 * Prod_Costs(i, 2); 
-        double a0 = Prod_Costs(i, 1) - marginal_revenue; 
-        double discriminant = a1 * a1 - 4 * a2 * a0; 
-
-        // no real roots -> MC > MR always -> shutdown production; otherwise use rightmost root 
-        if (discriminant <= 0) { opt_quant = 0; } 
-        else { opt_quant = (-a1 + sqrt(discriminant)) / (2 * a2); } 
-
-        // calculate stuff based on optimal quantity, to make shutdown/exit decisions 
-        double opt_cost = get_cost(i, opt_quant); 
-        double opt_avg_total_cost = (opt_quant != 0) ? (opt_cost / opt_quant) : 0; 
-        double opt_avg_var_cost = (opt_quant != 0) ? ((opt_cost - Prod_Costs(i, 0)) / opt_quant) : 0; 
-        Eigen::VectorXd temp_quants = quants; 
-        temp_quants(i) = opt_quant; 
-        double opt_price = Elas_Inv.row(i).dot(quants_0 - temp_quants); 
+        double opt_quant = get_opt_quantity(i); 
+        double opt_avg_total_cost = get_avg_total_cost(i, opt_quant); 
+        double opt_avg_var_cost = get_avg_var_cost(i, opt_quant); 
+        double opt_price = get_price(i, opt_quant); 
 
         // shutdown/exit logic 
         if (opt_price < opt_avg_var_cost) { opt_quant = 0; } 
         if (opt_price < opt_avg_total_cost) { firms.at(i)->exit_counter++; } 
+        else                                { firms.at(i)->exit_counter = 0; } 
 
         // calculate actual next quantity; recalculate other stuff based on it 
-        quants(i) = std::min(opt_quant, quants(i) + quants_0(i) / 365 / 2); 
+        quants(i) = std::min(opt_quant, quants(i) + quants_0(i) / sim.timestep / 2); 
         prices(i) = Elas_Inv.row(i).dot(quants_0 - quants); 
-        double cost = get_cost(i, quants(i)); 
-        double avg_total_cost = (quants(i) != 0) ? (cost / quants(i)) : 0; 
-        double avg_var_cost = (quants(i) != 0) ? ((cost - Prod_Costs(i, 0)) / quants(i)) : 0; 
+        double avg_total_cost = get_avg_total_cost(i, quants(i)); 
         
         // calculate relevant data to store 
+        double social_opt_quant = get_social_opt_quantity(i); 
+        auto DL_integrand = [i](double q) { return deadweight_loss_integrand(i, q); }; 
+        auto CS_integrand = [i](double q) { return consumer_surplus_integrand(i, q); }; 
         double profit = (prices(i) - avg_total_cost) * quants(i); 
-        // todo: calculate consumer surplus & deadweight loss (need numerical integration) 
-
-        // update firm 
+        double deadweight_loss = boost::math::quadrature::trapezoidal(DL_integrand, opt_quant, social_opt_quant, 1e-6); 
+        double consumer_surplus = boost::math::quadrature::trapezoidal(CS_integrand, 0.0, opt_quant, 1e-6); 
         firms.at(i)->profit += profit; 
+        firms.at(i)->deadweight_loss += deadweight_loss; 
+        firms.at(i)->consumer_surplus += consumer_surplus; 
     }
 }
 
@@ -328,6 +322,11 @@ std::string SimConfig::to_string() const {
             + std::string("\nwarmup: ") + std::to_string(warmup); 
 }
 
+std::string Firm::to_string() const {
+    return "profit: " + std::to_string(profit) 
+            + "\tdeadweight_loss: " + std::to_string(deadweight_loss) 
+            + "\tconsumer_surplus: " + std::to_string(consumer_surplus); 
+}
 
 std::string profits_as_str() {
     std::string result = ""; 
@@ -391,3 +390,14 @@ double get_social_opt_quantity(size_t k) {
     double discriminant = a1*a1 - 4*a2*a0; 
     return (discriminant > 0) ? ((-a1 + sqrt(discriminant)) / (2*a2)) : 0; 
 }
+
+
+double deadweight_loss_integrand(size_t k, double quantity) {
+    return get_price(k, quantity) - get_marginal_cost(k, quantity); 
+}
+
+double consumer_surplus_integrand(size_t k, double quantity) {
+    return get_price(k, quantity) - get_price(k, get_opt_quantity(k)); 
+}
+
+

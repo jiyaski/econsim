@@ -20,7 +20,7 @@ enum Timestep {
 
 
 struct SimConfig {
-    int num_firms = 10; 
+    int num_firms = 5;                 // 10 
     float ease_of_entry = 1; 
     std::string compl_sign = "any"; 
     float compl_min = 0.0f; 
@@ -45,6 +45,8 @@ struct Firm {
     double deadweight_loss = 0; 
     double consumer_surplus = 0; 
     int exit_counter = 0; 
+
+    std::string to_string() const; 
 }; 
 
 
@@ -65,3 +67,5 @@ double get_avg_var_cost(size_t k, double quantity);
 double get_opt_quantity(size_t k); 
 double get_social_opt_quantity(size_t k); 
 
+double deadweight_loss_integrand(size_t k, double quantity); 
+double consumer_surplus_integrand(size_t k, double quantity); 
