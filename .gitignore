@@ -1,6 +1,7 @@
 model-2/results/
 model-3/bin/*
 model-3/obj/*
+model-3/output/*
 
 *temp
 temp*

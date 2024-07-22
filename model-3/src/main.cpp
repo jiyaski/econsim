@@ -2,13 +2,6 @@
 #include "pch.h"
 #include "main.h" 
 
-#include <cstring>
-#include <iostream> 
-#include <fstream>
-#include <vector> 
-#include <unistd.h>
-#include <memory>
-
 
 namespace po = boost::program_options;
 SimConfig sim;
@@ -55,6 +48,11 @@ int main(int argc, char* argv[]) {
         std::cout << "-------------------------------------------" << std::endl; 
     }
     std::cout << std::endl; 
+
+    write_matrix_to_csv(Elas, "output/Elas.csv"); 
+    write_matrix_to_csv(Prod_Costs, "output/Prod_Costs.csv"); 
+    write_vector_to_csv(quants_0, "output/quants_0.csv"); 
+    write_vector_to_csv(prices_0, "output/prices_0.csv"); 
 
 
     return 0;
@@ -171,21 +169,23 @@ void add_good(std::mt19937& gen) {
         Prod_Costs.row(N) = Prod_Costs.row(0); 
     } else {
         double c0 = dist(gen) * MPS / 5; 
-        double c3 = dist(gen) * 16 / 3 * price_0 / (quant_0*quant_0); 
-        std::vector<double> intervals = {0.0, quant_0}; 
-        std::vector<double> weights = {1.0, 0.0};  // max probability at 0, decreasing to zero at quant_0 
-        std::piecewise_linear_distribution<> dist2(intervals.begin(), intervals.end(), weights.begin()); 
-
-        double vertex_x = dist2(gen); 
-        Eigen::VectorXd quants_temp = quants; 
-        quants_temp(N) = vertex_x; 
-        double vertex_y_max = Elas_Inv.row(N).dot(quants_0 - quants_temp); 
-        double vertex_y = dist(gen) * vertex_y_max; 
+        double c3 = dist(gen) * (16 * price_0) / (3 * quant_0 * quant_0); 
+        
+        double vertex_x = dist(gen) * quant_0; 
+        double vertex_y = dist(gen) * price_0; 
+        std::cout << "(x, y) = " << vertex_x / quant_0 << ", " << vertex_y / price_0; 
+        if (vertex_y > price_0 - price_0 / quant_0 * vertex_x) { 
+            vertex_x = quant_0 - vertex_x;  
+            vertex_y = price_0 - vertex_y; 
+            std::cout << "  -->  " << vertex_x / quant_0 << ", " << vertex_y / price_0; 
+        } 
+        std::cout << std::endl; 
+        
 
         double c2 = -3 * c3 * vertex_x; 
-        double c1 = vertex_y + 3 * c3 * vertex_x  * vertex_x; 
+        double c1 = vertex_y + 3 * c3 * vertex_x * vertex_x; 
         Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
-        Prod_Costs.row(N) << c0 / sim.timestep, c1 / sim.timestep, c2 / sim.timestep, c3 / sim.timestep; 
+        Prod_Costs.row(N) << c0, c1, c2, c3;  // we do NOT scale these by sim.timestep bc it's already accounted for 
     }
 
     firms.push_back(std::make_unique<Firm>(Firm{})); 
@@ -401,3 +401,41 @@ double consumer_surplus_integrand(size_t k, double quantity) {
 }
 
 
+
+
+template<typename Matrix>
+void write_matrix_to_csv(const Matrix& matrix, const std::string& filename) {
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        for (int i = 0; i < matrix.rows(); ++i) {
+            for (int j = 0; j < matrix.cols(); ++j) {
+                file << matrix(i, j);
+                if (j != matrix.cols() - 1) {
+                    file << ",";
+                }
+            }
+            file << "\n";
+        }
+        file.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+
+template<typename Vector>
+void write_vector_to_csv(const Vector& vector, const std::string& filename) {
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        for (int i = 0; i < vector.size(); ++i) {
+            file << vector(i);
+            if (i != vector.size() - 1) {
+                file << "\n";
+            }
+        }
+        file << "\n";
+        file.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}

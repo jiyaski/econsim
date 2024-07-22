@@ -1,0 +1,4 @@
+All scripts in this folder should be run from the `model-3` directory, 
+since relative filepaths will be defined from there. 
+
+Example: `python3 scripts/filename.py` 

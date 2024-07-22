@@ -69,3 +69,10 @@ double get_social_opt_quantity(size_t k);
 
 double deadweight_loss_integrand(size_t k, double quantity); 
 double consumer_surplus_integrand(size_t k, double quantity); 
+
+template<typename Matrix>
+void write_matrix_to_csv(const Matrix& matrix, const std::string& filename); 
+
+template<typename Vector>
+void write_vector_to_csv(const Vector& vector, const std::string& filename); 
+
