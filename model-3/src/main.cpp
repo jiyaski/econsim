@@ -181,7 +181,6 @@ void add_good(std::mt19937& gen) {
         } 
         std::cout << std::endl; 
         
-
         double c2 = -3 * c3 * vertex_x; 
         double c1 = vertex_y + 3 * c3 * vertex_x * vertex_x; 
         Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
