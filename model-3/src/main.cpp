@@ -27,6 +27,8 @@ int main(int argc, char* argv[]) {
     std::random_device rd;
     std::mt19937 gen(rd()); 
     N = 0; 
+    delete_file("output/quants.csv"); 
+    delete_file("output/prices.csv"); 
 
     for (int i = 0; i < sim.num_firms; i++) {
         add_good(gen); 
@@ -53,6 +55,7 @@ int main(int argc, char* argv[]) {
     write_matrix_to_csv(Prod_Costs, "output/Prod_Costs.csv"); 
     write_vector_to_csv(quants_0, "output/quants_0.csv"); 
     write_vector_to_csv(prices_0, "output/prices_0.csv"); 
+
 
 
     return 0;
@@ -96,6 +99,9 @@ void step() {
         firms.at(i)->deadweight_loss += deadweight_loss; 
         firms.at(i)->consumer_surplus += consumer_surplus; 
     }
+
+    append_vector_to_csv(quants, "output/quants.csv"); 
+    append_vector_to_csv(prices, "output/prices.csv"); 
 }
 
 
@@ -399,8 +405,6 @@ double consumer_surplus_integrand(size_t k, double quantity) {
 }
 
 
-
-
 template<typename Matrix>
 void write_matrix_to_csv(const Matrix& matrix, const std::string& filename) {
     std::ofstream file(filename);
@@ -420,7 +424,6 @@ void write_matrix_to_csv(const Matrix& matrix, const std::string& filename) {
     }
 }
 
-
 template<typename Vector>
 void write_vector_to_csv(const Vector& vector, const std::string& filename) {
     std::ofstream file(filename);
@@ -435,5 +438,29 @@ void write_vector_to_csv(const Vector& vector, const std::string& filename) {
         file.close();
     } else {
         std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+template<typename Vector>
+void append_vector_to_csv(const Vector& vector, const std::string& filename) {
+    std::ofstream file(filename, std::ios_base::app); // Open in append mode
+    if (file.is_open()) {
+        for (int i = 0; i < vector.size(); ++i) {
+            file << vector(i);
+            if (i != vector.size() - 1) {
+                file << ",";
+            }
+        }
+        file << "\n";
+        file.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+
+void delete_file(const std::string& filename) {
+    if (std::remove(filename.c_str()) != 0) {
+        std::cerr << "Error deleting file: " << filename << std::endl;
     }
 }

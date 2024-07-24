@@ -76,3 +76,7 @@ void write_matrix_to_csv(const Matrix& matrix, const std::string& filename);
 template<typename Vector>
 void write_vector_to_csv(const Vector& vector, const std::string& filename); 
 
+template<typename Vector>
+void append_vector_to_csv(const Vector& vector, const std::string& filename); 
+
+void delete_file(const std::string& filename); 

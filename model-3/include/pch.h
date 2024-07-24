@@ -8,6 +8,7 @@
 
 // Standard Template Library 
 #include <cstring>
+#include <cstdio>
 #include <iostream> 
 #include <fstream>
 #include <vector> 
