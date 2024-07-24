@@ -86,11 +86,12 @@ void step() {
         
         // calculate relevant data to store 
         double social_opt_quant = get_social_opt_quantity(i); 
+        std::cout << "opt_quant: " << opt_quant << "\tsocial_opt_quant: " << social_opt_quant << "\n";    // ------------------------- !
         auto DL_integrand = [i](double q) { return deadweight_loss_integrand(i, q); }; 
         auto CS_integrand = [i](double q) { return consumer_surplus_integrand(i, q); }; 
         double profit = (prices(i) - avg_total_cost) * quants(i); 
-        double deadweight_loss = boost::math::quadrature::trapezoidal(DL_integrand, opt_quant, social_opt_quant, 1e-6); 
-        double consumer_surplus = boost::math::quadrature::trapezoidal(CS_integrand, 0.0, opt_quant, 1e-6); 
+        double deadweight_loss = (quants(i) == 0.0) ? 0.0 : boost::math::quadrature::trapezoidal(DL_integrand, opt_quant, social_opt_quant, 1e-6); 
+        double consumer_surplus = (quants(i) == 0.0) ? 0.0 : boost::math::quadrature::trapezoidal(CS_integrand, 0.0, opt_quant, 1e-6); 
         firms.at(i)->profit += profit; 
         firms.at(i)->deadweight_loss += deadweight_loss; 
         firms.at(i)->consumer_surplus += consumer_surplus; 
@@ -173,11 +174,9 @@ void add_good(std::mt19937& gen) {
         
         double vertex_x = dist(gen) * quant_0; 
         double vertex_y = dist(gen) * price_0; 
-        std::cout << "(x, y) = " << vertex_x / quant_0 << ", " << vertex_y / price_0; 
         if (vertex_y > price_0 - price_0 / quant_0 * vertex_x) { 
             vertex_x = quant_0 - vertex_x;  
             vertex_y = price_0 - vertex_y; 
-            std::cout << "  -->  " << vertex_x / quant_0 << ", " << vertex_y / price_0; 
         } 
         std::cout << std::endl; 
         
