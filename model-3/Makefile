@@ -15,7 +15,7 @@ CXXFLAGS = -Wall -g -I/usr/include/eigen3 -I$(INC_DIR) -Wno-ignored-attributes
 # LDFLAGS = 
 
 # libraries to link 
-LIBS = -lboost_program_options
+LIBS = -lboost_program_options -lboost_math_tr1
 
 # executable file to build 
 TARGET = econsim

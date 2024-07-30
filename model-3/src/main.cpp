@@ -2,12 +2,6 @@
 #include "pch.h"
 #include "main.h" 
 
-#include <cstring>
-#include <iostream> 
-#include <fstream>
-#include <vector> 
-#include <unistd.h>
-
 
 namespace po = boost::program_options;
 SimConfig sim;
@@ -19,81 +13,225 @@ Eigen::VectorXd prices_0(0);
 Eigen::MatrixXd Elas(0, 0);  // elasticity matrix 
 Eigen::MatrixXd Elas_Inv(0, 0); 
 Eigen::Matrix<double,Eigen::Dynamic,4> Prod_Costs(0, 4); 
+size_t N;  // number of firms 
 
-
+std::vector<std::unique_ptr<Firm>> firms; 
 
 
 
 int main(int argc, char* argv[]) {
 
     parse_options(argc, argv);
-    std::cout << sim.to_string() << std::endl; 
+    std::cout << "\n" << sim.to_string() << "\n\n"; 
 
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(rd()); 
+    N = 0; 
+    delete_file("output/quants.csv"); 
+    delete_file("output/prices.csv"); 
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < sim.num_firms; i++) {
         add_good(gen); 
-        std::cout << Elas << "\n\n"; 
     }
-    std::cout << "temp test thing 2";
+
+    std::cout << "Elasticities: --------------------------------\n" << Elas 
+            << "\n\nquants_0: " << quants_0.transpose() 
+            << "\n\nprices_0: " << prices_0.transpose() 
+            << "\n\nProd_Costs: \n" << Prod_Costs << "\n\n"; 
+    
+    for (int i = 0; i < 10; i++) {
+        step(); 
+
+        // print firm states after each timestep 
+        std::cout << "(t = " << std::to_string(i) << "):\n"; 
+        for (int j = 0; j < sim.num_firms; j++) {
+            std::cout << "firm " << std::to_string(j) << " --  " << firms.at(j)->to_string() << "\n"; 
+        }
+        std::cout << "-------------------------------------------" << std::endl; 
+    }
+    std::cout << std::endl; 
+
+    write_matrix_to_csv(Elas, "output/Elas.csv"); 
+    write_matrix_to_csv(Prod_Costs, "output/Prod_Costs.csv"); 
+    write_vector_to_csv(quants_0, "output/quants_0.csv"); 
+    write_vector_to_csv(prices_0, "output/prices_0.csv"); 
+
 
 
     return 0;
 }
 
 
+void step() {
+
+    for (size_t i = 0; i < N; i++) {
+
+        // remove any firms that have been unprofitable long enough to exit 
+        if (firms.at(i)->exit_counter > 3 * sim.timestep) {
+            remove_good(i); 
+            continue; 
+        }
+
+        double opt_quant = get_opt_quantity(i); 
+        double opt_avg_total_cost = get_avg_total_cost(i, opt_quant); 
+        double opt_avg_var_cost = get_avg_var_cost(i, opt_quant); 
+        double opt_price = get_price(i, opt_quant); 
+
+        // shutdown/exit logic 
+        if (opt_price < opt_avg_var_cost) { opt_quant = 0; } 
+        if (opt_price < opt_avg_total_cost) { firms.at(i)->exit_counter++; } 
+        else                                { firms.at(i)->exit_counter = 0; } 
+
+        // calculate actual next quantity; recalculate other stuff based on it 
+        quants(i) = std::min(opt_quant, quants(i) + quants_0(i) / sim.timestep / 2); 
+        prices(i) = Elas_Inv.row(i).dot(quants_0 - quants); 
+        double avg_total_cost = get_avg_total_cost(i, quants(i)); 
+        
+        // calculate relevant data to store 
+        double social_opt_quant = get_social_opt_quantity(i); 
+        std::cout << "opt_quant: " << opt_quant << "\tsocial_opt_quant: " << social_opt_quant << "\n";    // ------------------------- !
+        auto DL_integrand = [i](double q) { return deadweight_loss_integrand(i, q); }; 
+        auto CS_integrand = [i](double q) { return consumer_surplus_integrand(i, q); }; 
+        double profit = (prices(i) - avg_total_cost) * quants(i); 
+        double deadweight_loss = (quants(i) == 0.0) ? 0.0 : boost::math::quadrature::trapezoidal(DL_integrand, opt_quant, social_opt_quant, 1e-6); 
+        double consumer_surplus = (quants(i) == 0.0) ? 0.0 : boost::math::quadrature::trapezoidal(CS_integrand, 0.0, opt_quant, 1e-6); 
+        firms.at(i)->profit += profit; 
+        firms.at(i)->deadweight_loss += deadweight_loss; 
+        firms.at(i)->consumer_surplus += consumer_surplus; 
+    }
+
+    append_vector_to_csv(quants, "output/quants.csv"); 
+    append_vector_to_csv(prices, "output/prices.csv"); 
+}
+
+
+/**
+ * adds a good to the market. 
+ * 
+ * @param gen - pseudorandom generator to use for initializing the good's properties 
+ */
 void add_good(std::mt19937& gen) {
 
     // a + rand*(b-a) transforms the uniform distribution to produce rand outputs between a and b 
     std::uniform_real_distribution<> dist(0, 1); 
 
     // generate new entry for quants_0 and prices_0 vectors 
-    int N = Elas.rows(); 
-    double MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)); 
-    double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)); 
-    double quant_0 = 2 * r; 
-    double price_0 = MPS / r; 
+    double quant_0, price_0, MPS; 
+    if (sim.uniform_demand && N >= 1) {
+        quant_0 = quants_0(0); 
+        price_0 = prices_0(0); 
+        MPS = quant_0 * price_0 / 2; 
+    } else {
+        MPS = std::pow(10, LOG_MPS_MIN + dist(gen) * (LOG_MPS_MAX - LOG_MPS_MIN)) / sim.timestep; 
+        double r = std::pow(10, LOG_R_MIN + dist(gen) * (LOG_R_MAX - LOG_R_MIN)) / sim.timestep; 
+        quant_0 = 2 * r; 
+        price_0 = MPS / r; 
+    }
     quants_0.conservativeResize(N + 1); 
     prices_0.conservativeResize(N + 1); 
     quants_0(N) = quant_0; 
     prices_0(N) = price_0; 
 
-    // add new row/col to Elasticity matrix & recalculate its inverse 
-    double ela_ii = quant_0 / price_0;  // diagonal entry of elasticity matrix for this good's row 
+
+    //// add new row/col to Elasticity matrix & recalculate its inverse 
+    double ela_ii = sim.flat_demand ? 0 : quant_0 / price_0; 
     Elas.conservativeResize(N+1, N+1); 
     Elas(N, N) = ela_ii; 
-    for (int i = 0; i < N; i++) {
+
+    for (size_t i = 0; i < N; i++) { 
+        if (sim.flat_demand || sim.compl_sign == "zero") { 
+            Elas(N, i) = 0; 
+            Elas(i, N) = 0;
+            continue; 
+        }
+
+        // if sim.compl_sign = "pos", we'll just leave these values as they are
         Elas(N, i) =  (sim.compl_min + dist(gen) * (sim.compl_max - sim.compl_min)) * ela_ii; 
         Elas(i, N) = ((sim.compl_min + dist(gen) * (sim.compl_max - sim.compl_min)) * Elas(i, i)); 
+
+        if (sim.compl_sign == "neg") {
+            Elas(N, i) = -Elas(N, i); 
+            Elas(i, N) = -Elas(i, N); 
+        } 
+        else if (sim.compl_sign == "any") {
+            double rand = dist(gen); 
+            if (rand < 0.25)       { /* do nothing */ } 
+            else if (rand < 0.5)   { Elas(N, i) = -Elas(N, i); } 
+            else if (rand < 0.75)  { Elas(i, N) = -Elas(i, N); } 
+            else                   { Elas(N, i) = -Elas(N, i);    Elas(i, N) = -Elas(i, N); }
+        }
     }
     Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(Elas); 
     Elas_Inv = cod.pseudoInverse(); 
 
+    // update quantity & price vectors
     quants.conservativeResize(N + 1); 
     prices.conservativeResize(N + 1); 
     quants(N) = 0; 
     prices(N) = Elas_Inv.row(N).dot(quants_0 - quants);
 
     // generate new production cost parameters (c0->fixed costs; c1->linear costs; c2->quadratic; c3->cubic) 
-    double c0 = dist(gen) * MPS / 5; 
-    double c3 = dist(gen) * 16 / 3 * price_0 / (quant_0*quant_0); 
-    std::vector<double> intervals = {0.0, quant_0}; 
-    std::vector<double> weights = {1.0, 0.0};  // max probability at 0, decreasing to zero at quant_0 
-    std::piecewise_linear_distribution<> dist2(intervals.begin(), intervals.end(), weights.begin()); 
+    if (sim.uniform_costs && N >= 1) {
+        Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
+        Prod_Costs.row(N) = Prod_Costs.row(0); 
+    } else {
+        double c0 = dist(gen) * MPS / 5; 
+        double c3 = dist(gen) * (16 * price_0) / (3 * quant_0 * quant_0); 
+        
+        double vertex_x = dist(gen) * quant_0; 
+        double vertex_y = dist(gen) * price_0; 
+        if (vertex_y > price_0 - price_0 / quant_0 * vertex_x) { 
+            vertex_x = quant_0 - vertex_x;  
+            vertex_y = price_0 - vertex_y; 
+        } 
+        std::cout << std::endl; 
+        
+        double c2 = -3 * c3 * vertex_x; 
+        double c1 = vertex_y + 3 * c3 * vertex_x * vertex_x; 
+        Prod_Costs.conservativeResize(N + 1, Eigen::NoChange); 
+        Prod_Costs.row(N) << c0, c1, c2, c3;  // we do NOT scale these by sim.timestep bc it's already accounted for 
+    }
 
-    double vertex_x = dist2(gen); 
-    Eigen::VectorXd quants_temp = quants; 
-    quants_temp(N) = vertex_x; 
-    double vertex_y_max = Elas_Inv.row(N).dot(quants_0 - quants_temp); 
-    double vertex_y = dist(gen) * vertex_y_max; 
-
-    double c2 = -3 * c3 * vertex_x; 
-    double c1 = vertex_y + 3 * c3 * vertex_x  * vertex_x; 
-    Prod_Costs.conservativeResize(Prod_Costs.rows() + 1, Eigen::NoChange); 
-    Prod_Costs.row(Prod_Costs.rows() - 1) << c0, c1, c2, c3; 
+    firms.push_back(std::make_unique<Firm>(Firm{})); 
+    N++; 
 }
 
+
+/**
+ * removes a good from the market. 
+ * 
+ * @param k - index of the good to remove
+ */
+void remove_good(int k) {
+
+    Eigen::VectorXd quants_temp(N - 1); 
+    Eigen::VectorXd prices_temp(N - 1); 
+    Eigen::VectorXd quants_0_temp(N - 1); 
+    Eigen::VectorXd prices_0_temp(N - 1); 
+    Eigen::MatrixXd Elas_temp_1(N, N - 1); 
+    Eigen::MatrixXd Elas_temp_2(N - 1, N - 1); 
+    Eigen::Matrix<double, Eigen::Dynamic, 4> Prod_Costs_temp(N - 1, 4); 
+
+    quants_temp << quants.head(k), quants.tail(N - k - 1); 
+    prices_temp << prices.head(k), prices.tail(N - k - 1); 
+    quants_0_temp << quants_0.head(k), quants_0.tail(N - k - 1); 
+    prices_0_temp << prices_0.head(k), prices_0.tail(N - k - 1); 
+    Elas_temp_1 << Elas.leftCols(k), Elas.rightCols(N - k - 1); 
+    Elas_temp_2 << Elas_temp_1.topRows(k), Elas_temp_1.bottomRows(N - k - 1); 
+    Prod_Costs_temp << Prod_Costs.topRows(k), Prod_Costs.bottomRows(N - k - 1); 
+
+    quants = quants_temp; 
+    prices = prices_temp; 
+    quants_0 = quants_0_temp; 
+    prices_0 = prices_0_temp; 
+    Elas = Elas_temp_2; 
+    Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(Elas); 
+    Elas_Inv = cod.pseudoInverse(); 
+    Prod_Costs = Prod_Costs_temp; 
+
+    firms.erase(firms.begin() + k); 
+    N--; 
+}
 
 
 void parse_options(int argc, char* argv[]) {
@@ -188,5 +326,141 @@ std::string SimConfig::to_string() const {
             + std::string("\nwarmup: ") + std::to_string(warmup); 
 }
 
+std::string Firm::to_string() const {
+    return "profit: " + std::to_string(profit) 
+            + "\tdeadweight_loss: " + std::to_string(deadweight_loss) 
+            + "\tconsumer_surplus: " + std::to_string(consumer_surplus); 
+}
+
+std::string profits_as_str() {
+    std::string result = ""; 
+    for (const auto& firm : firms) {
+        result += std::to_string(firm->profit) + " \t"; 
+    }
+    return result; 
+}
 
 
+
+
+
+double get_price(size_t k, double quantity) {
+    Eigen::VectorXd quants_temp = quants; 
+    quants_temp(k) = quantity; 
+    return Elas_Inv.row(k).dot(quants_0 - quants_temp); 
+}
+
+double get_marginal_revenue(size_t k, double quantity) {
+    double loss_term = (Elas(k, k) != 0) ? (quantity / Elas(k, k)) : 0; 
+    return get_price(k, quantity) - loss_term; 
+}
+
+double get_cost(size_t k, double quantity) {
+    double q_factor = 1; 
+    double result = 0; 
+    for (int i = 0; i <= 3; i++) {
+        result += Prod_Costs(k, i) * q_factor; 
+        q_factor *= quantity; 
+    }
+    return result; 
+}
+
+double get_marginal_cost(size_t k, double quantity) {
+    return Prod_Costs(k, 1) + 2*Prod_Costs(k, 2)*quantity + 3*Prod_Costs(k, 3)*quantity*quantity; 
+}
+
+double get_avg_total_cost(size_t k, double quantity) {
+    return (quantity != 0) ? (get_cost(k, quantity) / quantity) : 0; 
+}
+
+double get_avg_var_cost(size_t k, double quantity) {
+    return (quantity != 0) ? ((get_cost(k, quantity) - Prod_Costs(k, 0)) / quantity) : 0; 
+}
+
+
+double get_opt_quantity(size_t k) {
+    double ela_ii_inv = (Elas(k, k) != 0) ? (1 / Elas(k, k)) : 0; 
+    double a2 = 3 * Prod_Costs(k, 3); 
+    double a1 = 2 * Prod_Costs(k, 2); 
+    double a0 = Prod_Costs(k, 1) + quants(k) * ela_ii_inv - Elas_Inv.row(k).dot(quants_0 - quants); 
+    double discriminant = a1*a1 - 4*a2*a0; 
+    return (discriminant > 0) ? ((-a1 + sqrt(discriminant)) / (2*a2)) : 0; 
+} 
+
+double get_social_opt_quantity(size_t k) {
+    double a2 = 3 * Prod_Costs(k, 3); 
+    double a1 = 2 * Prod_Costs(k, 2); 
+    double a0 = Prod_Costs(k, 1) - Elas_Inv.row(k).dot(quants_0 - quants); 
+    double discriminant = a1*a1 - 4*a2*a0; 
+    return (discriminant > 0) ? ((-a1 + sqrt(discriminant)) / (2*a2)) : 0; 
+}
+
+
+double deadweight_loss_integrand(size_t k, double quantity) {
+    return get_price(k, quantity) - get_marginal_cost(k, quantity); 
+}
+
+double consumer_surplus_integrand(size_t k, double quantity) {
+    return get_price(k, quantity) - get_price(k, get_opt_quantity(k)); 
+}
+
+
+template<typename Matrix>
+void write_matrix_to_csv(const Matrix& matrix, const std::string& filename) {
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        for (int i = 0; i < matrix.rows(); ++i) {
+            for (int j = 0; j < matrix.cols(); ++j) {
+                file << matrix(i, j);
+                if (j != matrix.cols() - 1) {
+                    file << ",";
+                }
+            }
+            file << "\n";
+        }
+        file.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+template<typename Vector>
+void write_vector_to_csv(const Vector& vector, const std::string& filename) {
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        for (int i = 0; i < vector.size(); ++i) {
+            file << vector(i);
+            if (i != vector.size() - 1) {
+                file << "\n";
+            }
+        }
+        file << "\n";
+        file.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+template<typename Vector>
+void append_vector_to_csv(const Vector& vector, const std::string& filename) {
+    std::ofstream file(filename, std::ios_base::app); // Open in append mode
+    if (file.is_open()) {
+        for (int i = 0; i < vector.size(); ++i) {
+            file << vector(i);
+            if (i != vector.size() - 1) {
+                file << ",";
+            }
+        }
+        file << "\n";
+        file.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+
+void delete_file(const std::string& filename) {
+    if (std::remove(filename.c_str()) != 0) {
+        std::cerr << "Error deleting file: " << filename << std::endl;
+    }
+}
